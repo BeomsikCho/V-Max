@@ -40,7 +40,8 @@ reward_config:
   offroad: -1.0
   red_light: -1.0
   off_route: -0.6
-  progression: 0.2
+  sdc_progression: 0.2
+  # expert_progression: 0.2
 
 # Observation config
 observation_type: vec

@@ -88,7 +88,8 @@ def _get_reward_fn(reward_name: str) -> callable:
         "overspeed": _compute_overspeed_limit_reward,
         "driving_direction": _compute_driving_direction_reward,
         "lane_deviation": _compute_deviate_lane_reward,
-        "progression": _compute_making_progress_reward,
+        "sdc_progression": _compute_making_progress_reward,
+        "expert_progression": _compute_expert_progress_reward,
     }
 
     if reward_name not in reward_dict:
@@ -287,6 +288,56 @@ def _compute_making_progress_reward(state: datatypes.SimulatorState) -> bool:
     previous_progression = waymax_metrics.ProgressionMetric().compute(n_state).value
 
     return current_progression > previous_progression
+
+
+# Expert-path progression: roadgraph-independent alternative to the sdc_paths-based
+# ProgressionMetric above. Wired to the "expert_progression" reward key in _get_reward_fn.
+
+_EXPERT_PROGRESS_MAX_STEP_M = 3.0  # clip per-step arc delta (m): bounds projection jumps
+_EXPERT_MIN_PATH_M = 0.5  # expert barely moved → emit no progress signal
+
+
+def _expert_path_arclength(state: datatypes.SimulatorState) -> tuple[jax.Array, jax.Array]:
+    """Project the SDC's current position onto its own expert (logged) trajectory.
+
+    Returns ``(arc, total)``: ``arc`` is the cumulative arc-length (m) of the nearest
+    expert point to the SDC's current xy, ``total`` is the expert path's full length
+    (m). The reference is the logged ego trajectory itself, so this is fully
+    independent of the roadgraph / sdc_paths.
+    """
+    sdc_index = operations.get_index(state.object_metadata.is_sdc)
+    sim = jax.tree.map(lambda x: x[sdc_index], state.sim_trajectory)
+    expert = jax.tree.map(lambda x: x[sdc_index], state.log_trajectory)
+
+    # Cumulative arc-length along the expert path: cum[i] = distance from point 0 to i.
+    seg = jnp.linalg.norm(jnp.diff(expert.xy, axis=0), axis=-1)
+    cum = jnp.concatenate([jnp.zeros((1,), dtype=seg.dtype), jnp.cumsum(seg)])
+
+    # Arc-length of the nearest valid expert point to the current sim position.
+    sdc_xy = sim.xy[state.timestep]
+    dist = jnp.where(expert.valid, jnp.linalg.norm(sdc_xy - expert.xy, axis=-1), jnp.inf)
+    return cum[jnp.argmin(dist)], cum[-1]
+
+
+def _compute_expert_progress_reward(state: datatypes.SimulatorState) -> float:
+    """Dense forward-progress reward measured along the expert (logged) path.
+
+    Drop-in replacement for the sdc_paths-based ProgressionMetric: projects the SDC's
+    current and previous positions onto the logged ego trajectory and rewards the gain
+    in arc-length, normalized by the expert path's total length. Stays valid when
+    sdc_paths are inaccurate (e.g. rideflux) since it never touches the roadgraph.
+
+    The per-step delta is clipped to bound spurious jumps from the nearest-point
+    projection (self-intersections / U-turns); the episode return then telescopes to
+    the ``progress_ratio`` evaluation metric.
+    """
+    curr_arc, total = _expert_path_arclength(state)
+    prev_arc, _ = _expert_path_arclength(state.replace(timestep=state.timestep - 1))
+
+    delta = jnp.clip(
+        curr_arc - prev_arc, -_EXPERT_PROGRESS_MAX_STEP_M, _EXPERT_PROGRESS_MAX_STEP_M
+    )
+    return jnp.where(total < _EXPERT_MIN_PATH_M, 0.0, delta / total)
 
 
 # Linar reward functions
