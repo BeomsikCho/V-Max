@@ -39,9 +39,11 @@ reward_config:
   overlap: -1.0
   offroad: -1.0
   red_light: -1.0
-  off_route: -0.6
+  off_route: -0.2
   sdc_progression: 0.2
   # expert_progression: 0.2
+  # comfort: 0.2
+  # overspeed: -0.1
 
 # Observation config
 observation_type: vec
