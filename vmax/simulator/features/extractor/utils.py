@@ -87,7 +87,7 @@ def normalize_path(x: jax.Array, meters: int) -> jax.Array:
         Normalized path.
 
     """
-    x = jnp.clip(x, min=-meters, max=meters)
+    x = jnp.clip(x, min=-5 * meters, max=5 * meters)
     x = x / meters
 
     return x

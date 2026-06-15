@@ -8,6 +8,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib as mpl
 from waymax import datatypes
+from waymax.utils import geometry
 
 from vmax.simulator import features, operations, overrides
 from vmax.simulator.features import extractor
@@ -556,6 +557,47 @@ class VecFeaturesExtractor(extractor.AbstractFeaturesExtractor):
         indices = indices[: self._num_target_path_points]
         path_target = jnp.take(sdc_path, indices, axis=0)
 
+        path_target = extractor.normalize_path(path_target, self._max_meters)
+
+        return features.PathTargetFeatures(xy=path_target)
+
+    def _build_expert_target_features(
+        self, sdc_obs: datatypes.Observation, state: datatypes.SimulatorState
+    ) -> features.PathTargetFeatures:
+        """Build path target features from the SDC's logged goal endpoint.
+
+        Roadgraph-independent alternative to :meth:`_build_target_features`. Instead
+        of sampling along the roadgraph-derived sdc_path (unreliable for some
+        datasets, e.g. rideflux), the target is a single goal point: the SDC's
+        logged position at the end of the scenario (~9 s ahead). The RL agent must
+        work out how to reach it. The point is repeated to keep the existing
+        (num_points, 2) tensor shape so the network input size is unchanged.
+
+        Not wired by default; swap the ``_build_target_features`` calls in
+        ``extract_features``/``plot_features`` to use this instead.
+
+        Args:
+            sdc_obs: The SDC observation (provides the local-frame pose).
+            state: The simulator state (provides the logged trajectory).
+
+        Returns:
+            An instance of PathTargetFeatures with the goal point.
+        """
+        if not self._path_target_features_key:
+            return features.PathTargetFeatures()
+
+        # SDC logged trajectory; pick the last valid step as the ~9 s goal.
+        sdc_index = operations.get_index(state.object_metadata.is_sdc)
+        sdc_log = jax.tree.map(lambda x: x[sdc_index], state.log_trajectory)
+        steps = jnp.arange(sdc_log.valid.shape[-1])
+        last_valid_idx = jnp.max(jnp.where(sdc_log.valid, steps, 0))
+        endpoint_global = sdc_log.xy[last_valid_idx]  # (2,) world frame
+
+        # Transform into the SDC-local frame used by the rest of the observation.
+        endpoint_local = geometry.transform_points(sdc_obs.pose2d.matrix, endpoint_global)
+
+        # Repeat to keep the (num_points, 2) shape; normalize with the endpoint scale.
+        path_target = jnp.broadcast_to(endpoint_local, (self._num_target_path_points, 2))
         path_target = extractor.normalize_path(path_target, self._max_meters)
 
         return features.PathTargetFeatures(xy=path_target)
