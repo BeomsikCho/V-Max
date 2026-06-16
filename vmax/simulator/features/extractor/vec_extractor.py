@@ -242,7 +242,7 @@ class VecFeaturesExtractor(extractor.AbstractFeaturesExtractor):
         objects_features = self._build_objects_features(sdc_observation)
         roadgraphs_features = self._build_roadgraph_features(sdc_observation)
         traffic_lights_features = self._build_traffic_lights_features(sdc_observation)
-        path_target_features = self._build_target_features(sdc_observation)
+        path_target_features = self._build_expert_target_features(sdc_observation, state)
 
         # (num_agents + 1, obs_past_num_steps, num_trajectories_features)
         stack_object_features = objects_features.stack_fields()
@@ -377,7 +377,7 @@ class VecFeaturesExtractor(extractor.AbstractFeaturesExtractor):
         objects_features = self._build_objects_features(sdc_observation)
         roadgraphs_features = self._build_roadgraph_features(sdc_observation)
         traffic_lights_features = self._build_traffic_lights_features(sdc_observation)
-        path_target_features = self._build_target_features(sdc_observation)
+        path_target_features = self._build_expert_target_features(sdc_observation, state)
 
         # 1. Plot objects trajectories and bbox
         objects_features.plot(ax)
