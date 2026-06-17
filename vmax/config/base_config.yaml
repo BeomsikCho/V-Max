@@ -40,8 +40,8 @@ reward_config:
   offroad: -1.0
   red_light: -1.0
   off_route: -0.2
-  sdc_progression: 0.2
-  # expert_progression: 0.2
+  # sdc_progression: 0.2
+  expert_progression: 10.0
   # comfort: 0.2
   # overspeed: -0.1
 
