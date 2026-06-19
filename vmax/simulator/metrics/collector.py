@@ -31,6 +31,7 @@ _metrics_operands = {
         "ttc_within_bound": partial(aggregators.all_within_bound, min_value=0.95),
     },
     "at_fault_collision": np.max,  # 1.0 if collision is at fault
+    "offroad_in_box": np.max,  # 1.0 if road-edge point inside SDC footprint (direction-free offroad)
     "comfort": np.min,  # comfort metric value (0 if thresholds violated)
     "speed_limit": {
         "max_overspeed_m_per_s": np.max,

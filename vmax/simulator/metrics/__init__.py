@@ -9,6 +9,7 @@ from .at_fault_collision import AtFaultCollisionMetric
 from .collector import collect
 from .comfort import ComfortMetric
 from .driving_direction_compliance import DrivingDirectionComplianceMetric
+from .offroad_in_box import OffroadInBoxMetric
 from .on_multiple_lanes import OnMultipleLanesMetric
 from .progress_ratio import ProgressRatioMetric
 from .red_light import RunRedLightMetric, get_id_red_for_sdc
@@ -29,6 +30,7 @@ __all__ = [
     "FollowLaneMetric",
     "FollowLaneMetric",
     "OffRouteMetric",
+    "OffroadInBoxMetric",
     "OnMultipleLanesMetric",
     "ProgressRatioMetric",
     "RunRedLightMetric",
@@ -52,6 +54,7 @@ _VMAX_METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
     "on_multiple_lanes": OnMultipleLanesMetric(),
     "driving_direction_compliance": DrivingDirectionComplianceMetric(),
     "progress_ratio_nuplan": ProgressRatioMetric(),
+    "offroad_in_box": OffroadInBoxMetric(),
 }
 
 

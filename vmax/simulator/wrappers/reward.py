@@ -81,6 +81,7 @@ def _get_reward_fn(reward_name: str) -> callable:
         "log_div": _compute_log_divergence_reward,
         "overlap": _compute_overlap_reward,
         "offroad": _compute_offroad_reward,
+        "offroad_in_box": _compute_offroad_in_box_reward,
         "off_route": _compute_off_route_reward,
         "below_ttc": _compute_below_ttc_reward,
         "red_light": _compute_red_light_reward,
@@ -135,6 +136,29 @@ def _compute_offroad_reward(state: datatypes.SimulatorState) -> bool:
     sdc_offroad = jax.tree.map(lambda x: x[sdc_idx], offroad)
 
     return sdc_offroad == 1.0
+
+
+def _compute_offroad_in_box_reward(state: datatypes.SimulatorState) -> bool:
+    """Compute a reward penalizing offroad via the direction-free in-box test.
+
+    Mirrors :func:`_compute_offroad_reward` but uses :class:`OffroadInBoxMetric`
+    (a road-edge point inside the SDC 2D footprint) instead of Waymax's
+    ``OffroadMetric``. Intended for datasets where road-edge ``dir_xyz`` / ``ids``
+    are unreliable (e.g. rideflux). ``compute`` already returns the SDC-scoped
+    scalar, so no per-object indexing is needed. The footprint margin is hardcoded
+    (the default of ``is_sdc_offroad_in_box``), shared with the metric and
+    termination — not configurable here. Assign a negative weight.
+
+    Args:
+        state: Current simulator state.
+
+    Returns:
+        True if off-road detected, False otherwise.
+
+    """
+    offroad = metrics.OffroadInBoxMetric().compute(state).value
+
+    return offroad == 1.0
 
 
 def _compute_red_light_reward(state: datatypes.SimulatorState) -> bool:
