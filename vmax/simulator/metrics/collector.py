@@ -84,6 +84,7 @@ def collect(metrics: dict, key_metric: str) -> dict:
 
     episode_metrics["nuplan_aggregate_score"] = aggregators.nuplan_aggregate_score(episode_metrics)
     episode_metrics["vmax_aggregate_score"] = aggregators.vmax_aggregate_score(episode_metrics)
+    episode_metrics["rideflux_aggregate_score"] = aggregators.rideflux_aggregate_score(episode_metrics)
 
     return episode_metrics
 

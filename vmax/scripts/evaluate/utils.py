@@ -24,6 +24,7 @@ from vmax.agents import pipeline
 from vmax.simulator import make_env_for_evaluation, overrides, visualization
 from vmax.simulator.metrics.aggregators import (
     nuplan_aggregate_score,
+    rideflux_aggregate_score,
     vmax_aggregate_score,
 )
 from vmax.simulator.metrics.collector import _metrics_operands
@@ -484,5 +485,9 @@ def append_episode_metrics(steps_done, eval_metrics, episode_metrics, term_keys,
         if "vmax_aggregate_score" not in eval_metrics:
             eval_metrics["vmax_aggregate_score"] = []
         eval_metrics["vmax_aggregate_score"].append(vmax_aggregate_score(batch_metrics))
+
+        if "rideflux_aggregate_score" not in eval_metrics:
+            eval_metrics["rideflux_aggregate_score"] = []
+        eval_metrics["rideflux_aggregate_score"].append(rideflux_aggregate_score(batch_metrics))
 
     return eval_metrics

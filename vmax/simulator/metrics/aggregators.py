@@ -98,3 +98,14 @@ def vmax_aggregate_score(metrics_dict: dict):
     )
 
     return avg_score * mul_score
+
+
+def rideflux_aggregate_score(metrics_dict: dict):
+    # todo: ttc_within_bound는 roadgraph-free인데 추가 고려
+
+    avg_score = 7 * np.clip(metrics_dict["progress_ratio"], 0, 1) + 3 * metrics_dict["comfort"]
+    avg_score /= 10
+
+    mul_score = (1 - metrics_dict["overlap"]) * (1 - metrics_dict["offroad_in_box"])
+
+    return avg_score * mul_score

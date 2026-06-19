@@ -310,8 +310,12 @@ def main():
         # Print a summary of key metrics
         print("\n-> Evaluation Summary:")
         print(f"Accuracy: {np.mean(eval_metrics['accuracy']):.4f}")
+        if "nuplan_aggregate_score" in eval_metrics:
+            print(f"nuPlan Score: {np.mean(eval_metrics['nuplan_aggregate_score']):.4f}")
         if "vmax_aggregate_score" in eval_metrics:
             print(f"V-Max Score: {np.mean(eval_metrics['vmax_aggregate_score']):.4f}")
+        if "rideflux_aggregate_score" in eval_metrics:
+            print(f"Rideflux Score: {np.mean(eval_metrics['rideflux_aggregate_score']):.4f}")
 
 
 if __name__ == "__main__":
