@@ -58,7 +58,7 @@ class OffroadInBoxMetric(abstract_metric.AbstractMetric):
 
 def is_sdc_offroad_in_box(
     state: datatypes.SimulatorState,
-    margin: float = 0.0,
+    margin: float = -0.3,
 ) -> jnp.ndarray:
     """Return 1.0 if any road-edge point lies inside the SDC 2D bounding box.
 
