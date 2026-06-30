@@ -202,7 +202,7 @@ def setup_evaluation(
         eval_path = f"{eval_name}/rule_based/{policy_type}/{path_dataset}/"
 
         eval_config = {"max_num_objects": max_num_objects}
-        termination_keys = ["overlap", "offroad", "run_red_light"]
+        termination_keys = ["overlap", "offroad_in_box"]  # ["overlap", "offroad", "run_red_light"]
 
         env = make_env_for_evaluation(
             max_num_objects=max_num_objects,
