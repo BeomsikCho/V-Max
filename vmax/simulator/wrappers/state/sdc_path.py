@@ -8,21 +8,29 @@ import jax
 import jax.numpy as jnp
 from waymax import datatypes
 
+from vmax.simulator import constants
 from vmax.simulator.wrappers.base import Wrapper
 
 
 class SDCPathWrapper(Wrapper):
     """Wrapper to inject SDC paths in the SimulatorState."""
 
-    def __init__(self, env: Wrapper) -> None:
+    def __init__(self, env: Wrapper, dummy: bool = True) -> None:
         """Initialize the SDC path wrapper.
 
         Args:
             env: Environment to wrap.
+            dummy: If True (default), inject a cheap all-invalid placeholder path
+                instead of synthesizing a real one from the roadgraph. The
+                observation target comes from the logged goal endpoint (not
+                ``sdc_paths``), so for datasets without precomputed paths the
+                expensive roadgraph traversal is pure wasted compute. Set to
+                False to restore the real :func:`add_sdc_path_to_simulator_state`.
 
         """
         super().__init__(env)
         self._sdc_path = True
+        self._dummy = dummy
 
     def reset(self, state: datatypes.SimulatorState, rng: jax.Array) -> datatypes.SimulatorState:
         """Reset the environment by adding SDC path information.
@@ -37,7 +45,10 @@ class SDCPathWrapper(Wrapper):
         """
         chex.assert_equal(state.shape, ())
 
-        state = add_sdc_path_to_simulator_state(state)
+        if self._dummy:
+            state = add_dummy_sdc_path_to_simulator_state(state)
+        else:
+            state = add_sdc_path_to_simulator_state(state)
 
         return self.env.reset(state, rng)
 
@@ -250,6 +261,48 @@ def build_path_target(
     path_target = jnp.stack([x, y], axis=-1)
 
     return path_target, ids, valids
+
+
+def add_dummy_sdc_path_to_simulator_state(
+    state: datatypes.SimulatorState,
+) -> datatypes.SimulatorState:
+    """Inject a placeholder (all-invalid) SDC path into the simulator state.
+
+    For datasets without precomputed SDC paths (``waymo_dataset=true``) where a
+    real path is not needed (e.g. rideflux, whose observation target is the
+    logged goal endpoint rather than the roadgraph), synthesizing a path with
+    :func:`add_sdc_path_to_simulator_state` is pure wasted compute (a roadgraph
+    traversal via ``while_loop``/``scan``/``fori_loop``).
+
+    This fills ``sdc_paths`` with a same-shaped, all-invalid placeholder so every
+    consumer keeps working with no code change: the field stays present, and
+    every metric that reads it (``sdc_off_route``, ``sdc_progression``) sees
+    ``valid=False`` and self-masks to ``(0.0, valid=False)`` instead of emitting
+    garbage. Shape matches :func:`add_sdc_path_to_simulator_state`: a single path
+    of ``NUM_POINTS_PER_SDC_PATH`` points.
+
+    Args:
+        state: Current simulator state.
+
+    Returns:
+        Updated simulator state with a placeholder SDC path.
+
+    """
+    # (num_paths=1, num_points_per_path), matching the real builder's shape.
+    shape = (1, constants.NUM_POINTS_PER_SDC_PATH)
+    zeros = jnp.zeros(shape, dtype=jnp.float32)
+
+    return state.replace(
+        sdc_paths=datatypes.Paths(
+            x=zeros,
+            y=zeros,
+            z=zeros,
+            ids=jnp.full(shape, -1, dtype=jnp.int32),
+            valid=jnp.zeros(shape, dtype=jnp.bool_),
+            arc_length=zeros,
+            on_route=jnp.zeros((1, 1), dtype=jnp.bool_),
+        ),
+    )
 
 
 def add_sdc_path_to_simulator_state(state: datatypes.SimulatorState) -> datatypes.SimulatorState:
