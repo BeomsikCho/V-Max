@@ -32,7 +32,7 @@ _metrics_operands = {
     },
     "at_fault_collision": np.max,  # 1.0 if collision is at fault
     "offroad_in_box": np.max,  # 1.0 if road-edge point inside SDC footprint (direction-free offroad)
-    "comfort": np.min,  # comfort metric value (0 if thresholds violated)
+    "comfort": np.mean,  # fraction of comfortable steps in the episode (was np.min = all-or-nothing)
     "speed_limit": {
         "max_overspeed_m_per_s": np.max,
         "max_overspeed_km_per_h": lambda x: 3.6 * np.max(x),
