@@ -116,7 +116,8 @@ def normalize_by_feature(
     elif feature_key == "object_types":  # objects
         data = onehot_encoder(data, dict_mapping["object_types"])
     elif feature_key == "vel_xy":
-        data = jnp.clip(data, min=0, max=MAX_SPEED)
+        # local-frame components are signed (oncoming/reversing → negative)
+        data = jnp.clip(data, min=-MAX_SPEED, max=MAX_SPEED)
         data = data / MAX_SPEED  # m/s
     elif feature_key in ["length", "width", "height"]:
         data = data / meters  # m
