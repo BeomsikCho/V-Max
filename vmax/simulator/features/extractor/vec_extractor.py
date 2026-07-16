@@ -133,7 +133,6 @@ class VecFeaturesExtractor(extractor.AbstractFeaturesExtractor):
 
         # Path target
         self._num_target_path_points = self._path_target_config.get("num_points", 10)
-        self._points_gap = self._path_target_config.get("points_gap", 5)
 
         self._dict_mapping = {
             "types": extractor.utils.RG_MAPPING,  # roadgraph
@@ -520,61 +519,16 @@ class VecFeaturesExtractor(extractor.AbstractFeaturesExtractor):
 
         return traffic_light_features
 
-    def _build_target_features(
-        self, sdc_obs: datatypes.Observation
-    ) -> features.PathTargetFeatures:
-        """Build path target features from the SDC observation.
-
-        Args:
-            sdc_obs: The SDC observation.
-
-        Returns:
-            An instance of PathTargetFeatures with target path points.
-        """
-        # Don't override the class attribute - use the existing configuration
-        if not self._path_target_features_key:
-            return features.PathTargetFeatures()
-
-        # (1, num_paths, num_points_per_path)
-        sdc_paths = sdc_obs.sdc_paths
-        # (1, num_paths, 1)
-        on_route = sdc_paths.on_route
-        # (1, num_paths, num_points_per_path)
-        on_route = jnp.repeat(on_route, sdc_paths.num_points_per_path, axis=-1)
-        # (1, num_paths, num_points_per_path)
-        mask = jnp.logical_and(on_route, sdc_paths.valid)
-        longest_path_idx = jnp.argmax(jnp.sum(mask, axis=-1))
-
-        sdc_paths_xy = datatypes.MaskedArray.create_and_validate(
-            value=sdc_paths.xy,
-            valid=jnp.stack([mask, mask], axis=-1),
-        )
-        sdc_paths_xy = sdc_paths_xy.masked_value()
-
-        sdc_path = sdc_paths_xy[longest_path_idx]
-
-        indices = jnp.arange(self._points_gap, sdc_path.shape[0], self._points_gap)
-        indices = indices[: self._num_target_path_points]
-        path_target = jnp.take(sdc_path, indices, axis=0)
-
-        path_target = extractor.normalize_path(path_target, self._max_meters)
-
-        return features.PathTargetFeatures(xy=path_target)
-
     def _build_expert_target_features(
         self, sdc_obs: datatypes.Observation, state: datatypes.SimulatorState
     ) -> features.PathTargetFeatures:
         """Build path target features from the SDC's logged goal endpoint.
 
-        Roadgraph-independent alternative to :meth:`_build_target_features`. Instead
-        of sampling along the roadgraph-derived sdc_path (unreliable for some
-        datasets, e.g. rideflux), the target is a single goal point: the SDC's
-        logged position at the end of the scenario (~9 s ahead). The RL agent must
-        work out how to reach it. The point is repeated to keep the existing
-        (num_points, 2) tensor shape so the network input size is unchanged.
-
-        Not wired by default; swap the ``_build_target_features`` calls in
-        ``extract_features``/``plot_features`` to use this instead.
+        Roadgraph-independent: instead of sampling along a roadgraph-derived
+        sdc_path (unreliable for some datasets, e.g. rideflux), the target is a
+        single goal point: the SDC's logged position at the end of the scenario
+        (~9 s ahead). The RL agent must work out how to reach it. The point is
+        repeated to ``num_points`` to keep the (num_points, 2) tensor shape.
 
         Args:
             sdc_obs: The SDC observation (provides the local-frame pose).

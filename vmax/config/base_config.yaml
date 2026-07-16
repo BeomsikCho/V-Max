@@ -86,5 +86,4 @@ observation_config:
   path_target:
     features:
       - waypoints
-    num_points: 3
-    points_gap: 12
+    num_points: 1
