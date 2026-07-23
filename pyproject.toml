@@ -5,16 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "distrax>=0.1.7",
+    "distrax>=0.1.9",
     "einops>=0.8.2",
-    "gymnasium>=1.2.3",
-    "hydra-core>=1.3.2",
-    "imageio[ffmpeg]>=2.37.2",
-    "jax[cuda13]>=0.9.0.1",
-    "opencv-python>=4.12.0.88",
-    "tensorboardx>=2.6.4",
-    "tensorflow-cpu>=2.20.0",
-    "tf-keras>=2.20.1",
+    "gymnasium>=1.3.0",
+    "hydra-core>=1.3.4",
+    "jax[cuda13]>=0.11.0",
+    "tensorboardx>=2.6.5",
+    "tensorflow-cpu>=2.21.0",
+    "tf-keras>=2.21.0",
     "waymo-waymax",
 ]
 
@@ -23,7 +21,8 @@ dependencies = [
 exclude-dependencies = ["tensorflow"]
 
 [tool.uv.sources]
-waymo-waymax = { git = "https://github.com/waymo-research/waymax.git", rev = "main" }
+# waymo-waymax = { git = "https://github.com/waymo-research/waymax.git", rev = "main" }
+waymo-waymax = { git = "https://github.com/waymo-research/waymax.git", rev = "a64dfec9be8576b60d9cecc94f406d9812d4a7d0" }
 
 [tool.pyright]
 venvPath = "."

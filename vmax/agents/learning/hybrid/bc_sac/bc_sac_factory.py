@@ -11,6 +11,7 @@ import jax.numpy as jnp
 import optax
 
 from vmax.agents import datatypes, networks
+from vmax.agents.pipeline import pmap
 
 
 @flax.struct.dataclass
@@ -107,7 +108,7 @@ def initialize(
         rl_gradient_steps=0,
     )
 
-    training_state = jax.device_put_replicated(training_state, jax.local_devices()[:num_devices])
+    training_state = pmap.device_put_replicated(training_state, jax.local_devices()[:num_devices])
 
     return network, training_state, policy_function
 

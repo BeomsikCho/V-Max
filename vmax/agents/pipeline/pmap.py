@@ -19,6 +19,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 
 def unpmap(v):
@@ -47,6 +48,25 @@ def flatten_tree(v):
     return jax.tree.map(lambda x: x.flatten(), v)
 
 
+def device_put_replicated(x, devices):
+    """Replicate a pytree across devices with a new leading axis of size len(devices).
+
+    Drop-in replacement for jax.device_put_replicated, removed in jax 0.11
+    (https://docs.jax.dev/en/latest/migrate_pmap.html#drop-in-replacements).
+
+    Args:
+        x: A pytree to replicate.
+        devices: The devices to replicate across.
+
+    Returns:
+        The pytree with each leaf stacked len(devices) times and sharded one copy per device.
+
+    """
+    mesh = jax.sharding.Mesh(np.array(devices), ("x",))
+    sharding = jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec("x"))
+    return jax.tree.map(lambda y: jax.device_put(jnp.stack([y] * len(devices)), sharding), x)
+
+
 def bcast_local_devices(value, local_devices_to_use=1):
     """Broadcast a value to a subset of local devices.
 
@@ -59,7 +79,7 @@ def bcast_local_devices(value, local_devices_to_use=1):
 
     """
     devices = jax.local_devices()[:local_devices_to_use]
-    return jax.device_put_replicated(value, devices)
+    return device_put_replicated(value, devices)
 
 
 def synchronize_hosts() -> None:
