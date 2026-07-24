@@ -1,135 +1,108 @@
-<div align="center">
-  <img src="docs/assets/png/logo.png" alt="Demo" width="100%" />
-</div>
+# AI-Challenge (Closed-loop Planning task) baseline
 
-# V-Max
+This repository is the training baseline for the challenge. It is a modified version of
+[V-Max](https://github.com/valeoai/v-max) ([paper](https://arxiv.org/abs/2503.08388)) —
+a JAX-based motion-planning framework built on the
+[Waymax](https://github.com/waymo-research/waymax) simulator, providing closed-loop
+RL/IL training pipelines (SAC, PPO, BC), network encoders, and driving metrics.
+The modifications make the **rideflux challenge dataset** directly usable for training
+and evaluation: dataset-preparation scripts (301-step records → WOMD-format 91-step
+windows → Waymax sharded splits) plus the data-loading, observation, and metric
+adaptations for this dataset.
 
-![Python version](https://img.shields.io/badge/Python-3.11-blue) [![Paper](https://img.shields.io/badge/arXiv-2503.08388-b31b1b.svg)](https://arxiv.org/abs/2503.08388)
+The sections below cover the full pipeline: environment setup → dataset preparation →
+training → evaluation.
 
+## 1. Environment setup
 
-**V-Max** is a plug-and-play extension of the [Waymax](https://github.com/waymo-research/waymax) simulator for autonomous driving research. It provides a learning-based motion planning framework for benchmarking, training, and evaluation of path planners from bird-eye view to control.
-
-This framework integrates simulation pipelines, observation wrappers, and realistic metrics, making it easy to experiment with RL/IL algorithms, custom networks, and new features.
-
-
-<div align="center">
-<table>
-  <tr>
-    <th>Expert</th>
-    <th>RL Policy</th>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/trajectories/expert/scene1.gif" alt="Expert Scene 1" width="300"/></td>
-    <td><img src="docs/assets/trajectories/agent/scene1.gif" alt="Agent Scene 1" width="300"/></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/trajectories/expert/scene2.gif" alt="Expert Scene 2" width="300"/></td>
-    <td><img src="docs/assets/trajectories/agent/scene2.gif" alt="Agent Scene 2" width="300"/></td>
-  </tr>
-</table>
-</div>
-
-## Key Features
-
-- **Reinforcement Learning (SAC, PPO)** and **Imitation Learning (BC)** algorithms
-- **Rule-based policies** (IDM, PDM)
-- **Advanced network architectures** (MTR, Wayformer, ...)
-- **Comprehensive metrics and evaluations**
-- **ScenarioMax**: Unified datasets format with nuPlan, nuScenes and WOMD, with **SDC paths** support
-
-## Framework Structure
-
-The V-Max codebase is organized for modularity and extensibility:
-
-```
-vmax/
-├── agents/
-│   ├── learning/          # Reinforcement & imitation learning algorithms
-│   ├── networks/          # Neural network architectures (MTR, Wayformer, etc.)
-│   └── rule_based/        # Rule-based policies (IDM, PDM)
-├── simulator/
-│   ├── features/          # Feature extraction modules
-│   ├── metrics/           # Evaluation metrics
-│   ├── overrides/         # Waymax extensions and customizations
-│   ├── visualization/     # Visualization tools and utilities
-│   └── wrappers/          # Observation and environment wrappers
-└── scripts/
-```
-
-- **agents/**: All agent logic, including learning-based and rule-based policies.
-- **simulator/**: Simulation engine, feature extraction, metrics, and visualization.
-- **scripts/**: Entry points for training and evaluation.
-
-## ScenarioMax
-
-[**ScenarioMax**](https://github.com/valeoai/ScenarioMax) is a core feature of V-Max that enhances our data with **SDC paths**. These paths are crucial for calculating targets, rewards, and various metrics during simulation.
-
-Key objectives:
-
-- **Enrich Data:** By incorporating SDC paths, ScenarioMax helps improve the precision of target computations, reward evaluations, and metric calculations.
-- **Unified Dataset:** It consolidates data from different autonomous driving (AD) datasets into a single, standardized format, similar to the approaches found in [ScenarioNet](https://github.com/metadriverse/scenarionet).
-
-For those who prefer to run V-Max without the complete ScenarioMax integration, a lightweight wrapper is available. This wrapper generates one single SDC path at every scenario reset. Keep in mind that while this approach simplifies testing, it increases computational overhead and may not always produce an SDC path that perfectly matches the ground truth.
-
-#### Download
-
-Datasets processed via ScenarioMax with SDC paths are available on HuggingFace:
-
-  - [Mini datasets](https://huggingface.co/datasets/vcharraut/V-Max_Mini_Datasets) (~1,000 scenarios for nuPlan and WOMD)
-  - [Full datasets](https://huggingface.co/datasets/vcharraut/V-Max_Datasets)
-
-
-## Get Started
-
-### Installation
-
-1. **Clone the Repository**
-
-   ```bash
-   git clone https://github.com/valeoai/v-max
-   cd v-max
-   ```
-
-2. **Create a Virtual Environment & Install Dependencies**
-
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    pip install -r requirements.txt
-    pip install -e .
-    ```
-
-### Quickstart
-
-Train any RL/IL algorithm and network encoder implemented in V-Max:
+Recommended system: **Ubuntu 24.04 LTS (x86_64)** with the **latest NVIDIA driver**
+(the bundled CUDA 13 wheels require driver >= 580). No system CUDA/cuDNN installation
+is needed — all CUDA user-space libraries are installed as Python wheels.
 
 ```bash
-python vmax/scripts/training/train.py total_timesteps=$num_env_steps path_dataset="" algorithm=$alg_type network/encoder=$encoder_type
+# install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# clone and install
+git clone <this-repository>
+cd V-Max
+uv sync
 ```
 
-- See [`docs/training.md`](docs/training.md) for detailed training, feature selection, reward metrics, and configuration options.
+`uv sync` creates `.venv` with Python 3.12 (pinned in `.python-version`, downloaded
+automatically if not present) and installs the exact dependency versions recorded in
+`uv.lock`, including JAX with the CUDA 13 runtime.
 
+## 2. Dataset preparation
 
-## Documentation
+The challenge dataset is distributed as **301-step** TFRecords (past 150 / current 1 /
+future 150 frames @ 10 Hz), laid out as `<root>/<site>/<date>/*.tfrecord`. Two scripts
+turn it into a Waymax-loadable dataset.
 
-- [Training & Configurations](docs/training.md)
-- [Metrics](docs/metrics.md)
-- [Observation Wrappers](docs/observations.md)
-- [Simulator Overview](docs/v-max.md)
+### 2.1. Cut 301-step records into 91-step windows
 
+Stock Waymax parses WOMD-format 91-step records (past 10 / current 1 / future 80).
+`scripts/make_91f.py` cuts every 301-step record into 3 windows (starting at source
+steps 0 / 100 / 200) and repacks each one as a standard WOMD tf_example:
 
-## Authors
+```bash
+uv run python scripts/make_91f.py /data/rideflux_301f /data/rideflux_91f
+```
 
-- **[Valentin Charraut](https://github.com/vcharraut)**
-- **[Thomas Tournaire](https://github.com/Titou78)**
-- **[Wael Doulazmi](https://github.com/WaelDLZ)**
+The output mirrors the input tree 1:1 (3 records per output file). The run is atomic
+per file and resumable; append a number (e.g. `... make_91f.py <in> <out> 30`) for a
+smoke run on 30 files first.
 
-## Acknowledgements
+### 2.2. Build a Waymax sharded split
 
-V-Max is built upon the innovative ideas and contributions of several outstanding open-source projects:
+Waymax addresses datasets with sharded naming (`<name>.tfrecord@N`).
+`scripts/make_waymax_shards.py` symlinks a dataset tree into that layout and writes a
+`manifest.csv` (shard index -> source file):
 
-- **[Brax](https://github.com/google/brax)** – RL pipeline philosophy
-- **[Waymax](https://github.com/waymo-research/waymax)** – Simulation foundation
-- **[ScenarioNet](https://github.com/metadriverse/scenarionet)** – Unified data strategies
+```bash
+uv run python scripts/make_waymax_shards.py /data/rideflux_91f /data/splits/rideflux_trainset_91f
+```
 
-We are grateful to these communities for advancing autonomous driving research.
+Its last output line is the exact value to pass as `path_dataset`, e.g.
+
+```
+waymax path: /data/splits/rideflux_trainset_91f/rideflux_trainset_91f.tfrecord@85126
+```
+
+## 3. Training
+
+Set `path_dataset` to the `...tfrecord@N` path printed above. `waymo_dataset=true` is
+required for this dataset format (raw WOMD tf_examples, no precomputed SDC paths):
+
+``` bash
+CUDA_VISIBLE_DEVICES=0 uv run vmax/scripts/training/train.py  \
+    algorithm=sac \
+    network/encoder=lq \
+    total_timesteps=25_000_000 \
+    algorithm.learning_rate=1e-4 \
+    algorithm.buffer_size=1_000_000 \
+    algorithm.learning_start=50_000 \
+    'algorithm.network.policy.layer_sizes=[256,64,32]' \
+    'algorithm.network.value.layer_sizes=[256,64,32]' \
+    observation_config.objects.num_closest_objects=16 \
+    waymo_dataset=true \
+    path_dataset=/data/splits/rideflux_trainset_91f/rideflux_trainset_91f.tfrecord@85126 \
+    name_run=abcdef
+```
+
+Checkpoints and TensorBoard logs go to `runs/<run_name>/`.
+
+## 4. Evaluation
+
+`--path_model` is the `name_run` of the training run. `--path_dataset` accepts the
+same `@N` sharded naming, or the path of a plain single `.tfrecord` file. Results are
+written next to the model as `evaluation_episodes.csv` / `evaluation_results.txt`:
+
+``` bash
+CUDA_VISIBLE_DEVICES=0 uv run python vmax/scripts/evaluate/evaluate.py \
+    --waymo_dataset=true \
+    --path_dataset=/data/splits/rideflux_testset_91f/rideflux_testset_91f.tfrecord@N \
+    --sdc_actor=ai \
+    --path_model=abcdef \
+    --batch_size=64
+```

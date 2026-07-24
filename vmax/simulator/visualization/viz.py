@@ -9,7 +9,6 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 from scipy.stats import beta
 from waymax import config as waymax_config
 from waymax import datatypes
@@ -101,6 +100,8 @@ def plot_metrics(
 ) -> np.ndarray:
     """Plot np array image showing SimulatorState and merged metric plots.
 
+    Requires seaborn, which is not a project dependency (this function has no callers).
+
     Layout:
       - Top: SimulatorState plotted in a centered, wide axis.
       - Bottom: A single axis with merged metric bars grouped by type.
@@ -117,6 +118,8 @@ def plot_metrics(
         np array image.
 
     """
+    import seaborn as sns
+
     if batch_idx > -1:
         if len(state.shape) != 1:
             raise ValueError(f"Expecting one batch dimension, got {len(state.shape)}")
