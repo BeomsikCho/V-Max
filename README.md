@@ -11,7 +11,7 @@ windows → Waymax sharded splits) plus the data-loading, observation, and metri
 adaptations for this dataset.
 
 The sections below cover the full pipeline: environment setup → dataset preparation →
-training → evaluation.
+training → evaluation → submission export.
 
 ## 1. Environment setup
 
@@ -101,8 +101,20 @@ written next to the model as `evaluation_episodes.csv` / `evaluation_results.txt
 ``` bash
 CUDA_VISIBLE_DEVICES=0 uv run python vmax/scripts/evaluate/evaluate.py \
     --waymo_dataset=true \
-    --path_dataset=/data/splits/rideflux_testset_91f/rideflux_testset_91f.tfrecord@N \
+    --path_dataset=/data/splits/rideflux_valset_91f/rideflux_valset_91f.tfrecord@N \
     --sdc_actor=ai \
     --path_model=abcdef \
     --batch_size=64
+```
+
+## 5. Exporting policy weights for submission
+
+Checkpoints under `runs/<run_name>/model/` pickle the full network state (policy +
+value networks, as jax arrays) and can only be unpickled where the `vmax` package is
+importable. A challenge submission needs the policy alone, as a plain dict of numpy
+arrays (`weights.pkl`):
+
+``` bash
+uv run python scripts/export_policy_weights.py \
+    runs/<run_name>/model/model_final.pkl <submission_dir>/weights.pkl
 ```
