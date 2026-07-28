@@ -17,6 +17,14 @@ dependencies = [
     "waymo-waymax",
 ]
 
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "."
+module-name = "vmax"
+
 [tool.uv]
 # Prevent installing the GPU/monolithic TensorFlow package pulled by waymo-waymax.
 exclude-dependencies = ["tensorflow"]
