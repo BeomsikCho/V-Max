@@ -22,7 +22,7 @@ scenario_length: 80
 log_freq: 5
 save_freq: 200
 eval_freq: 0
-seed: 0
+seed: 1  # keep nonzero: seed 0 silently disables the waymax file shuffle (falsy check)
 name_run: null
 name_exp: null
 
