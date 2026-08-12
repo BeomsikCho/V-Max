@@ -31,7 +31,7 @@ exclude-dependencies = ["tensorflow"]
 
 [tool.uv.sources]
 # waymo-waymax = { git = "https://github.com/waymo-research/waymax.git", rev = "main" }
-waymo-waymax = { git = "https://github.com/waymo-research/waymax.git", editable = true }
+waymo-waymax = { git = "../waymax", editable = true }
 
 [tool.pyright]
 venvPath = "."
