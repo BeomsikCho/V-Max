@@ -8,7 +8,6 @@ import time
 from functools import partial
 
 import jax
-import numpy as np
 from tqdm import tqdm
 
 from vmax.scripts.evaluate import utils
@@ -182,13 +181,13 @@ def run_evaluation(
     jitted_reset = jax.jit(env.reset)
 
     rng_key = jax.random.PRNGKey(seed)
-    eval_metrics = {"episode_length": [], "accuracy": []}
     start_time_total = time.time()
 
     # Setup progress bar
     progress_bar = tqdm(desc="Evaluating scenarios", unit=" scenario")
 
     rendering = render or render_pov
+    metrics_writer = None if rendering else utils.EvaluationMetricsWriter(run_path)
 
     if rendering:
         _run_scenario = partial(
@@ -223,14 +222,18 @@ def run_evaluation(
             scenario_key = jax.random.split(scenario_key, batch_size)
             episode_metrics, steps_done = _run_scenario(scenario, scenario_key)
 
+            # Transfer each completed batch once instead of retaining JAX buffers.
+            episode_metrics, steps_done = jax.device_get((episode_metrics, steps_done))
+
             # Aggregate metrics for the episode.
-            eval_metrics = utils.append_episode_metrics(
+            batch_metrics = utils.append_episode_metrics(
                 steps_done,
-                eval_metrics,
+                {"episode_length": [], "accuracy": []},
                 episode_metrics,
                 termination_keys,
                 batch_size,
             )
+            metrics_writer.append(batch_metrics, start_index=total_scenarios)
 
         progress_bar.update(batch_size)
         total_scenarios += batch_size
@@ -241,14 +244,14 @@ def run_evaluation(
 
     # Write aggregated evaluation results.
     if not rendering:
-        utils.write_generator_result(run_path, total_scenarios, eval_metrics)
+        metrics_mean = metrics_writer.finalize(total_scenarios)
 
     print(
         f"-> Evaluation completed: {total_scenarios} episodes in {total_time:.2f}s "
         f"(avg {total_time / total_scenarios:.2f}s per episode)",
     )
 
-    return None if rendering else eval_metrics
+    return None if rendering else metrics_mean
 
 
 def main():
@@ -309,13 +312,13 @@ def main():
     if eval_metrics is not None:
         # Print a summary of key metrics
         print("\n-> Evaluation Summary:")
-        print(f"Accuracy: {np.mean(eval_metrics['accuracy']):.4f}")
+        print(f"Accuracy: {eval_metrics['accuracy']:.4f}")
         if "nuplan_aggregate_score" in eval_metrics:
-            print(f"nuPlan Score: {np.mean(eval_metrics['nuplan_aggregate_score']):.4f}")
+            print(f"nuPlan Score: {eval_metrics['nuplan_aggregate_score']:.4f}")
         if "vmax_aggregate_score" in eval_metrics:
-            print(f"V-Max Score: {np.mean(eval_metrics['vmax_aggregate_score']):.4f}")
+            print(f"V-Max Score: {eval_metrics['vmax_aggregate_score']:.4f}")
         if "rideflux_aggregate_score" in eval_metrics:
-            print(f"Rideflux Score: {np.mean(eval_metrics['rideflux_aggregate_score']):.4f}")
+            print(f"Rideflux Score: {eval_metrics['rideflux_aggregate_score']:.4f}")
 
 
 if __name__ == "__main__":

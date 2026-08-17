@@ -362,23 +362,8 @@ def write_video(run_path: str, episode_images: list, idx: int, is_noisy: bool = 
         print(f"Error writing video: {e}")
 
 
-def write_generator_result(save_path: str, num_scenarios: int, metrics: dict):
-    """Save evaluation results and metrics."""
-    # Create DataFrame directly from metrics
-    df = pd.DataFrame(metrics)
-    df.index.name = "scenario_index"
-
-    # CSV writing
-    df.to_csv(save_path + "/evaluation_episodes.csv", index=True)
-
-    # Calculate aggregated metrics.
-    metrics_mean = {}
-    for key, values in metrics.items():
-        if values:
-            # Handle both numpy arrays and regular values.
-            metrics_mean[key] = np.mean(
-                [val.item() if isinstance(val, np.ndarray) else val for val in values]
-            )
+def _write_metrics_summary(save_path: str, num_scenarios: int, metrics_mean: dict):
+    """Write aggregate evaluation metrics."""
 
     # Add derived metrics.
     if (
@@ -405,6 +390,58 @@ def write_generator_result(save_path: str, num_scenarios: int, metrics: dict):
             txtfile.write(f"{key:<{key_width}} {value:>{value_width}.5f}\n")
 
 
+class EvaluationMetricsWriter:
+    """Stream per-scenario metrics to disk while retaining only running sums."""
+
+    def __init__(self, save_path: str):
+        self.save_path = save_path
+        self.csv_path = os.path.join(save_path, "evaluation_episodes.csv")
+        self.metric_sums = {}
+        self.metric_counts = {}
+        self.csv_initialized = False
+        os.makedirs(save_path, exist_ok=True)
+
+    def append(self, metrics: dict, start_index: int):
+        """Append one evaluated batch and release its values after this call."""
+        if not metrics:
+            return
+
+        df = pd.DataFrame(metrics)
+        df.index = range(start_index, start_index + len(df))
+        df.index.name = "scenario_index"
+        df.to_csv(
+            self.csv_path,
+            mode="a" if self.csv_initialized else "w",
+            header=not self.csv_initialized,
+            index=True,
+        )
+        self.csv_initialized = True
+
+        for key, values in metrics.items():
+            values_array = np.asarray(values, dtype=np.float64)
+            self.metric_sums[key] = self.metric_sums.get(key, 0.0) + float(
+                np.sum(values_array)
+            )
+            self.metric_counts[key] = self.metric_counts.get(key, 0) + values_array.size
+
+    def finalize(self, num_scenarios: int) -> dict:
+        """Write and return means calculated from the streaming accumulators."""
+        metrics_mean = {
+            key: self.metric_sums[key] / self.metric_counts[key]
+            for key in self.metric_sums
+            if self.metric_counts[key]
+        }
+        _write_metrics_summary(self.save_path, num_scenarios, metrics_mean)
+        return metrics_mean
+
+
+def write_generator_result(save_path: str, num_scenarios: int, metrics: dict):
+    """Save evaluation results and metrics (legacy non-streaming entry point)."""
+    writer = EvaluationMetricsWriter(save_path)
+    writer.append(metrics, start_index=0)
+    return writer.finalize(num_scenarios)
+
+
 def plot_scene(env, env_transition, sdc_pov: bool):
     """Generate and return a plot image."""
     if sdc_pov:
@@ -421,7 +458,7 @@ def _process_metric(key, value, operand, batch_index, steps, eval_metrics, batch
 
     if not isinstance(operand, dict):
         # Apply operand to values directly
-        new_value = operand(batch_value)
+        new_value = float(np.asarray(operand(batch_value)))
         if key not in eval_metrics:
             eval_metrics[key] = []
         eval_metrics[key].append(new_value)
@@ -429,7 +466,7 @@ def _process_metric(key, value, operand, batch_index, steps, eval_metrics, batch
     else:
         # Handle nested metrics
         for sub_key, sub_operand in operand.items():
-            new_value = sub_operand(batch_value)
+            new_value = float(np.asarray(sub_operand(batch_value)))
             if sub_key not in eval_metrics:
                 eval_metrics[sub_key] = []
             eval_metrics[sub_key].append(new_value)
@@ -454,7 +491,7 @@ def append_episode_metrics(steps_done, eval_metrics, episode_metrics, term_keys,
     # Process each item in the batch
     for idx in range(batch_size):
         batch_metrics = {}  # Metrics for current batch item
-        steps = steps_done[idx][0]
+        steps = int(np.asarray(steps_done[idx][0]))
 
         eval_metrics["episode_length"].append(steps)
         batch_metrics["episode_length"] = steps
@@ -473,21 +510,27 @@ def append_episode_metrics(steps_done, eval_metrics, episode_metrics, term_keys,
             )
 
         # Calculate episode success for this batch item
-        accuracy = _check_episode_success(batch_metrics, term_keys)
+        accuracy = int(_check_episode_success(batch_metrics, term_keys))
         eval_metrics["accuracy"].append(accuracy)
         batch_metrics["accuracy"] = accuracy
 
         # Calculate and add aggregate scores
         if "nuplan_aggregate_score" not in eval_metrics:
             eval_metrics["nuplan_aggregate_score"] = []
-        eval_metrics["nuplan_aggregate_score"].append(nuplan_aggregate_score(batch_metrics))
+        eval_metrics["nuplan_aggregate_score"].append(
+            float(nuplan_aggregate_score(batch_metrics))
+        )
 
         if "vmax_aggregate_score" not in eval_metrics:
             eval_metrics["vmax_aggregate_score"] = []
-        eval_metrics["vmax_aggregate_score"].append(vmax_aggregate_score(batch_metrics))
+        eval_metrics["vmax_aggregate_score"].append(
+            float(vmax_aggregate_score(batch_metrics))
+        )
 
         if "rideflux_aggregate_score" not in eval_metrics:
             eval_metrics["rideflux_aggregate_score"] = []
-        eval_metrics["rideflux_aggregate_score"].append(rideflux_aggregate_score(batch_metrics))
+        eval_metrics["rideflux_aggregate_score"].append(
+            float(rideflux_aggregate_score(batch_metrics))
+        )
 
     return eval_metrics
